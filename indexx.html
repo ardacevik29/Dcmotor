@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kapalı Çevrim DC Motor Kontrol Sistemi Tasarımı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Özelleştirilmiş Scrollbar ve Seçim Renkleri */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        ::selection { background-color: #e0f2fe; color: #0284c7; }
+        
+        .nav-item.active {
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border-right: 4px solid #1d4ed8;
+            font-weight: 600;
+        }
+        .fade-in { animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Chart.js Container Zorunlulukları */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container { height: 350px; }
+        }
+
+        /* AI Chat Bubble Animation */
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+            margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+    </style>
+    
+    <!-- Chosen Palette: Clean Engineering (Slate/Blue/Teal) -->
+    <!-- Application Structure Plan: Sidebar navigation dashboard. Updated with a persistent contextual AI chat box at the bottom of each section to assist with engineering questions. Replaced analog voltmeter logic with digital counter logic in Section 5 to match project requirements. -->
+    <!-- Visualization & Content Choices: 
+         1. Overview -> Goal: Contextualize -> Method: HTML Block Diagram (Updated with digital branch) & Chart.js Step Response.
+         2. Hardware Sections -> Goal: Detail specs -> Method: Structured Q&A text blocks.
+         3. AI Integration -> Goal: Real-time engineering help -> Method: Embedded chat interface calling Gemini API. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-72 bg-white shadow-xl flex flex-col z-10 flex-shrink-0">
+        <div class="p-6 border-b border-slate-100">
+            <h1 class="text-xl font-bold text-slate-900 leading-tight">Motor Kontrol<br><span class="text-blue-600">Sistem Analizi</span></h1>
+            <div class="flex items-center mt-2 space-x-2">
+                <span class="text-xs text-slate-500">Donanım & Entegre Mimarisi</span>
+                <span class="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded flex items-center"><i class="fas fa-sparkles mr-1"></i>AI Destekli</span>
+            </div>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4" id="nav-menu">
+            <!-- Menü öğeleri JS ile buraya yüklenecek -->
+        </nav>
+        <div class="p-4 border-t border-slate-100 text-xs text-slate-400 text-center flex justify-center items-center">
+            <i class="fas fa-microchip mr-2"></i> Kapalı Çevrim Tasarımı
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden relative">
+        <header class="bg-white border-b border-slate-200 px-8 py-5 flex justify-between items-center z-0">
+            <h2 id="section-title" class="text-2xl font-semibold text-slate-800">Sisteme Genel Bakış</h2>
+            <div class="flex space-x-2">
+                <span class="px-3 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium"><i class="fas fa-check-circle mr-1"></i> Karma Tasarım (Analog/Dijital)</span>
+            </div>
+        </header>
+        
+        <div class="flex-1 overflow-y-auto p-8" id="content-container">
+            <!-- İçerik JS ile buraya yüklenecek -->
+        </div>
+    </main>
+
+    <script>
+        // --- DATA STORAGE ---
+        const projectData = {
+            overview: {
+                id: 'overview',
+                title: 'Sisteme Genel Bakış & Akış',
+                icon: 'fas fa-project-diagram',
+                content: `
+                    <p class="text-slate-600 mb-6 text-lg leading-relaxed">Bu proje, geri besleme için analog kontrol, gösterge için ise bağımsız dijital sayıcı kullanan <strong>karma (analog kontrol + dijital gösterge) bir motor hız kontrol sistemidir.</strong></p>
+                    
+                    <h3 class="text-lg font-bold text-slate-800 border-b pb-2 mb-4"><i class="fas fa-network-wired text-blue-500 mr-2"></i>Sistem Blok Diyagramı (Sinyal Akışı)</h3>
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8 overflow-x-auto">
+                        <div class="flex items-center space-x-4 min-w-[700px] justify-center text-sm font-medium">
+                            <div class="text-center"><div class="w-24 h-16 bg-blue-100 border border-blue-300 rounded-lg flex items-center justify-center text-blue-800 shadow-sm">Referans<br>Voltajı</div></div>
+                            <i class="fas fa-arrow-right text-slate-400"></i>
+                            <div class="text-center relative">
+                                <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-xl font-bold border-2 border-slate-300 relative z-10">&Sigma;</div>
+                                <div class="text-xs text-slate-500 absolute -bottom-5 w-full text-center">Hata (V_err)</div>
+                            </div>
+                            <i class="fas fa-arrow-right text-slate-400"></i>
+                            <div class="text-center"><div class="w-24 h-16 bg-purple-100 border border-purple-300 rounded-lg flex items-center justify-center text-purple-800 shadow-sm cursor-pointer hover:bg-purple-200 transition" onclick="loadSection(2)">PWM<br>Üreteci</div></div>
+                            <i class="fas fa-arrow-right text-slate-400"></i>
+                            <div class="text-center"><div class="w-24 h-16 bg-orange-100 border border-orange-300 rounded-lg flex items-center justify-center text-orange-800 shadow-sm cursor-pointer hover:bg-orange-200 transition" onclick="loadSection(3)">Motor<br>Sürücü</div></div>
+                            <i class="fas fa-arrow-right text-slate-400"></i>
+                            <div class="text-center"><div class="w-20 h-20 bg-slate-800 border-4 border-slate-600 rounded-full flex items-center justify-center text-white shadow-lg"><i class="fas fa-cogs text-3xl"></i></div><div class="text-xs mt-1 text-slate-600">DC Motor</div></div>
+                        </div>
+                        
+                        <!-- Geri Besleme Yolları (Analog ve Dijital ayrımı) -->
+                        <div class="flex justify-center mt-6 relative">
+                            <div class="flex items-center min-w-[500px] justify-between border-t-2 border-l-2 border-dashed border-teal-400 pt-4 pl-4 relative" style="margin-left: -50px;">
+                                <div class="text-center absolute -left-12 -top-10"><i class="fas fa-arrow-up text-teal-400 text-xl"></i></div>
+                                <div class="text-center"><div class="w-28 h-12 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center text-teal-700 shadow-sm cursor-pointer hover:bg-teal-100 transition" onclick="loadSection(4)">F/V Çevirici</div></div>
+                                <i class="fas fa-arrow-left text-teal-400"></i>
+                                <div class="text-center relative">
+                                    <div class="w-28 h-12 bg-teal-50 border border-teal-200 rounded-lg flex items-center justify-center text-teal-700 shadow-sm cursor-pointer hover:bg-teal-100 transition" onclick="loadSection(4)">Optik Sensör</div>
+                                    <!-- Dijital Göstergeye Giden Ayrım -->
+                                    <div class="absolute top-12 left-1/2 w-0.5 h-10 bg-indigo-300 border-l-2 border-dashed border-indigo-400"></div>
+                                    <div class="absolute top-22 -left-16 flex items-center">
+                                        <i class="fas fa-arrow-down text-indigo-400 mr-2 absolute -left-4 top-10"></i>
+                                        <div class="w-32 h-14 bg-indigo-50 border border-indigo-200 rounded-lg flex flex-col items-center justify-center text-indigo-700 shadow-sm cursor-pointer hover:bg-indigo-100 transition mt-20" onclick="loadSection(5)">
+                                            <span class="text-xs font-bold">Dijital Sayıcı</span>
+                                            <span class="text-[10px]">(Display)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="w-10 border-t-2 border-dashed border-teal-400"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h3 class="text-md font-bold text-slate-800 mb-4"><i class="fas fa-chart-line text-green-500 mr-2"></i>Beklenen Sistem Yanıtı (Teorik)</h3>
+                            <div class="chart-container">
+                                <canvas id="systemResponseChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-slate-800 p-6 rounded-xl shadow-sm text-white flex flex-col">
+                            <h3 class="text-md font-bold mb-4 text-blue-300"><i class="fas fa-robot mr-2"></i>Yapay Zeka Asistanı</h3>
+                            <p class="text-sm text-slate-300 leading-relaxed mb-4 flex-1">Projedeki entegreler, hesaplamalar veya bağlantılar hakkında takıldığınız yerleri her bölümün altındaki sohbet panelinden <strong>Gemini AI</strong>'a sorabilirsiniz. Öğrendiği bağlama (context) göre size donanım mühendisliği perspektifinden yanıt verecektir.</p>
+                            <div class="p-3 bg-slate-700 rounded-lg border border-slate-600">
+                                <p class="text-xs text-slate-400"><i class="fas fa-lightbulb text-yellow-400 mr-1"></i> <strong>İpucu:</strong> "CD4026 pin bağlantıları nedir?" veya "LM324 PI kontrolör formülü nedir?" gibi sorular deneyin.</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            sections: [
+                {
+                    id: 1,
+                    title: '1. Hata Kuvvetlendirici ve Kontrol (V_error)',
+                    icon: 'fas fa-wave-square',
+                    desc: 'Kullanıcının ayarladığı referans hız ile sensörden okunan gerçek hızın (analog karşılığının) karşılaştırıldığı karar merkezidir.',
+                    q1_title: 'Kullanılacak Topoloji',
+                    q1_text: '<strong>Fark Alıcı (Subtractor) / Analog PI Kontrolör Topolojisi.</strong> Sistem kapalı çevrim olduğu için, potansiyometreden gelen "Referans DC Gerilimi" ile F/V çeviriciden gelen "Gerçek Hız DC Gerilimi" birbirinden çıkarılarak bir "Hata (Error)" sinyali elde edilir. Stabilite için bir kondansatör eklenerek Oransal-İntegral (PI) kontrol topolojisi oluşturulur.',
+                    q2_title: 'Gerekli Entegreler',
+                    q2_text: '<strong>Operasyonel Amplifikatör (Op-Amp): LM324.</strong> Tek bir entegre içinde 4 adet op-amp bulunur; bu sayede hem empedans uygunlaştırma (buffer), hem fark alma, hem de PI kontrol işlemleri tek çipte çözülebilir.',
+                    q3_title: 'Çalışma Mantığı',
+                    q3_text: 'LM324 içindeki op-amp, inverting (-) ve non-inverting (+) girişlerine uygulanan voltajların farkını alır. <em>V_hata = V_referans - V_geribesleme</em> işlemini donanımsal olarak yapar. Motor yavaşsa V_error voltajı artar, motor hedef hıza ulaştığında V_error sabitleşir. Bu çıkış direkt olarak PWM katına iletilir.'
+                },
+                {
+                    id: 2,
+                    title: '2. PWM Üretimi Katı',
+                    icon: 'fas fa-bolt',
+                    desc: 'V_error katından gelen analog voltaj seviyesini, motor sürücüyü kontrol edecek dijital Darbe Genişlik Modülasyonu (PWM) sinyaline dönüştürür.',
+                    q1_title: 'Kullanılacak Topoloji',
+                    q1_text: '<strong>Üçgen Dalga Karşılaştırıcı (Comparator) Topolojisi.</strong> Analog PWM üretme yöntemidir. Sabit frekanslı bir üçgen (veya testere dişi) dalga üretilir ve bu dalga, V_error sinyali ile bir Karşılaştırıcı üzerinden kıyaslanır.',
+                    q2_title: 'Gerekli Entegreler',
+                    q2_text: '<strong>Karşılaştırıcı: LM311.</strong> Üçgen dalga üretmek için ise genellikle <strong>NE555</strong> veya ek bir op-amp osilatör devresi kullanılır.',
+                    q3_title: 'Çalışma Mantığı',
+                    q3_text: 'Evirmeyen (+) girişe V_error, Eviren (-) girişe sabit üçgen dalga girilir. V_error voltajı üçgen dalgadan yüksek olduğu anlarda çıkış LOJİK 1 (5V) olur. <strong>V_error voltajı arttıkça, sinyalin Lojik 1\'de kalma süresi (Duty Cycle) genişler.</strong> Bu da motora aktarılacak ortalama gücün artması demektir.'
+                },
+                {
+                    id: 3,
+                    title: '3. Motor Sürücü Katı (Motor Driver)',
+                    icon: 'fas fa-microchip',
+                    desc: 'PWM katından gelen sinyalleri kullanarak motorun çekeceği yüksek akımı ve voltajı anahtarlayan güç katıdır.',
+                    q1_title: 'Kullanılacak Topoloji',
+                    q1_text: '<strong>Low-Side N-Kanal MOSFET Anahtarlama.</strong> Motor tek yöne döneceği için H-Köprüsü yerine daha basit ve verimli olan tek MOSFET\'li anahtarlama tercih edilir. Kontrol devresini motorun gürültüsünden korumak için <strong>Optik İzolasyon</strong> şarttır.',
+                    q2_title: 'Gerekli Entegreler',
+                    q2_text: '<strong>Güç Anahtarı: IRFZ44N veya IRLZ44N (Lojik Seviye N-Kanal MOSFET).</strong><br><strong>İzolasyon: PC817 veya 4N25 Optokuplör.</strong> Ayrıca motorun sargılarından oluşacak ters EMK\'yı (Ters gerilim sıçramasını) sönümlemek için motora paralel bir <strong>Hızlı Diyot (örn: 1N4007 veya Schottky)</strong>.',
+                    q3_title: 'Çalışma Mantığı',
+                    q3_text: 'PWM sinyali PC817 optokuplörün LED\'ini yakıp söndürür. Bu durum optokuplör çıkışındaki transistörü anahtarlar ve MOSFET\'in Gate bacağına izole edilmiş temiz bir kare dalga iletir. MOSFET, PWM %50 duty cycle iken zamanın yarısında iletimde, yarısında kesimde kalarak motora ortalama %50 gerilim sağlar.'
+                },
+                {
+                    id: 4,
+                    title: '4. Optik Algılama ve F/V Dönüşümü',
+                    icon: 'fas fa-eye',
+                    desc: 'Motorun gerçek hızını optik olarak ölçüp, kontrol katının (V_error) ihtiyacı olan DC referans voltajına çevirir.',
+                    q1_title: 'Kullanılacak Topoloji',
+                    q1_text: '<strong>Optik İnterrupter ve Frekans-Gerilim Dönüştürücü (Charge-Pump).</strong> Motor miline takılan encoder diski optik yarıktan geçer. Sensörden elde edilen bu frekans tabanlı bilgi, donanımsal olarak genliğiyle orantılı bir DC gerilime dönüştürülür.',
+                    q2_title: 'Gerekli Entegreler',
+                    q2_text: '<strong>Sensör: TCST2103 (U tipi opto-interrupter).</strong><br><strong>Temizleyici: 74HC14 (Schmitt Trigger).</strong> Sensörün analogumsu yükseliş/düşüşlerini kesin dijital lojik seviyelere çeker.<br><strong>F/V Entegresi: LM2917.</strong>',
+                    q3_title: 'Çalışma Mantığı',
+                    q3_text: 'Motor döndükçe delikli disk kızılötesi ışığı keser ve kare dalga (frekans) oluşturur. (Not: Bu kare dalga aynı zamanda Gösterge katına da gönderilir). <strong>LM2917 entegresi</strong> girişine gelen bu frekansı okur. İçerisindeki charge-pump (şarj pompası) devresi sayesinde, giriş frekansı arttıkça çıkış kapasitörünü daha hızlı şarj eder ve hız ile orantılı pürüzsüz bir DC Voltaj üretir. Bu voltaj, kapalı çevrim kontrol için Bölüm 1\'e geri beslenir.'
+                },
+                {
+                    id: 5,
+                    title: '5. Gösterge (Display) Katı (Sayıcı Tabanlı)',
+                    icon: 'fas fa-desktop',
+                    desc: 'Proje dökümanındaki gereksinime uygun olarak, optik sensörden gelen darbeleri sabit bir sürede sayarak (Time-Gated Counter) doğrudan devir bilgisini ekranda gösteren dijital kattır.',
+                    q1_title: 'Kullanılacak Topoloji',
+                    q1_text: '<strong>Zaman Pencereli (Time-Gated) Dijital Frekans Sayıcı Topolojisi.</strong> Voltaj ölçmek yerine, sensörden gelen kare dalga darbeleri (pulselar) sabit bir süre boyunca (Örn: 1 saniye) bir lojik kapı (AND Gate) üzerinden sayıcıya aktarılır. Süre dolduğunda kapı kapanır, sayılan değer ekrana kilitlenir (Latch), ardından sayıcı sıfırlanarak yeni döngü başlar.',
+                    q2_title: 'Gerekli Entegreler',
+                    q2_text: '<strong>Sayıcı/Sürücü: CD4026 (Sayma ve 7-Segment Sürme bir arada).</strong> Veya daha gelişmiş bir tasarım için <strong>74HC390 (Çift onluk sayıcı) + CD4511 (Sürücü)</strong>.<br><strong>Zaman Penceresi (Gate) Üreteci: NE555 Timer.</strong> Sabit zamanlı (örn 1 Hz) kare dalga üretmek için Astable modda kurulur.<br><strong>Kontrol Kapıları: 74HC08 (AND Kapısı)</strong> sinyali iletmek/kesmek için.',
+                    q3_title: 'Çalışma Mantığı',
+                    q3_text: 'NE555 osilatörü ile hassas bir zaman penceresi (örneğin tam 1 saniyelik bir darbe) üretilir. Bu 1 saniyelik sinyal, optik sensörden gelen sinyalle bir AND (VE) kapısına girer. Böylece motorun sensöründen gelen darbeler <strong>sadece o 1 saniye boyunca</strong> sayıcı entegreye (CD4026) ulaşabilir. Süre dolduğunda AND kapısı sinyali keser. Ekranda o 1 saniyede okunan darbe sayısı görünür (Hz). Küçük bir gecikme devresi ile sayıcı reset (sıfırlama) pinine sinyal gönderilerek sayacın sıfırlanması ve yeni bir 1 saniyelik ölçüme hazırlanması sağlanır.'
+                }
+            ]
+        };
+
+        // --- DOM ELEMENTS & STATE ---
+        const navMenu = document.getElementById('nav-menu');
+        const contentContainer = document.getElementById('content-container');
+        const sectionTitle = document.getElementById('section-title');
+        let currentChart = null;
+        let currentSectionId = null;
+
+        // --- INITIALIZATION ---
+        function init() {
+            renderNav();
+            loadOverview();
+        }
+
+        // --- RENDER NAVIGATION ---
+        function renderNav() {
+            // Add Overview Button
+            const overviewBtn = document.createElement('a');
+            overviewBtn.href = "#";
+            overviewBtn.className = "nav-item flex items-center px-6 py-3 text-slate-600 hover:bg-slate-50 transition border-r-4 border-transparent text-sm";
+            overviewBtn.innerHTML = `<i class="${projectData.overview.icon} w-6 text-center text-lg mr-2"></i> Sisteme Genel Bakış`;
+            overviewBtn.onclick = (e) => { e.preventDefault(); loadOverview(); updateNavState('overview'); };
+            overviewBtn.dataset.id = 'overview';
+            navMenu.appendChild(overviewBtn);
+
+            // Add Sections
+            projectData.sections.forEach(sec => {
+                const btn = document.createElement('a');
+                btn.href = "#";
+                btn.className = "nav-item flex items-center px-6 py-3 text-slate-600 hover:bg-slate-50 transition border-r-4 border-transparent text-sm mt-1";
+                btn.innerHTML = `<i class="${sec.icon} w-6 text-center text-lg mr-2"></i> ${sec.title.substring(3)}`;
+                btn.onclick = (e) => { e.preventDefault(); loadSection(sec.id); updateNavState(sec.id); };
+                btn.dataset.id = sec.id;
+                navMenu.appendChild(btn);
+            });
+            
+            updateNavState('overview');
+        }
+
+        function updateNavState(activeId) {
+            document.querySelectorAll('.nav-item').forEach(el => {
+                if(el.dataset.id == activeId) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+        }
+
+        // --- AI INTEGRATION (GEMINI API) ---
+        async function callGeminiAPI(question, contextTitle, contextText) {
+            const apiKey = ""; // Provided by execution environment runtime
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const systemPrompt = `Sen bir Elektronik ve Donanım Mühendisliği hocası/uzmanısın. Kullanıcı bir DC Motor Kontrol projesi (analog döngü + dijital frekans sayıcı display) üzerinde çalışıyor. 
+Şu an incelediği donanım bloğu: ${contextTitle}. 
+Bu bloğun özellikleri: ${contextText}.
+Kullanıcının sorusuna, entegrelerin (LM324, CD4026, LM2917, NE555 vb.) pin yapılarını veya teorisini göz önünde bulundurarak teknik, eğitici ve Türkçe bir yanıt ver. Formatlama için sade markdown kullanabilirsin, gereksiz uzatma.`;
+
+            const payload = {
+                contents: [{ parts: [{ text: question }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let delay = 1000;
+            const retries = 5;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) throw new Error(`HTTP Hata: ${response.status}`);
+                    
+                    const data = await response.json();
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "Gemini'den boş yanıt döndü.";
+                } catch (error) {
+                    if (i === retries - 1) return `Yapay zeka asistanına şu an ulaşılamıyor (Hata: ${error.message}). Lütfen daha sonra tekrar deneyin.`;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function renderAIChatbox(containerElement, sectionData) {
+            const aiContainer = document.createElement('div');
+            aiContainer.className = "mt-8 bg-white border border-purple-200 rounded-xl shadow-sm overflow-hidden flex flex-col";
+            
+            aiContainer.innerHTML = `
+                <div class="bg-purple-50 px-4 py-3 border-b border-purple-100 flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center mr-3"><i class="fas fa-robot"></i></div>
+                    <div>
+                        <h4 class="text-sm font-bold text-purple-900">Mühendislik Asistanı</h4>
+                        <p class="text-[10px] text-purple-600">Bu bölüm (${sectionData.title}) hakkında soru sorun</p>
+                    </div>
+                </div>
+                <div id="ai-chat-history" class="p-4 max-h-60 overflow-y-auto bg-slate-50 text-sm space-y-4">
+                    <div class="flex items-start">
+                        <div class="bg-purple-100 text-purple-800 rounded-lg p-3 rounded-tl-none max-w-[85%]">
+                            Merhaba! Bu donanım katındaki konfigürasyonlar, formüller veya kullanılacak entegrelerin veri sayfaları (datasheet) hakkında yardıma ihtiyacınız var mı?
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-white border-t border-slate-100 flex items-center">
+                    <input type="text" id="ai-input" placeholder="Örn: Bu entegrenin bağlantıları nasıldır?" class="flex-1 bg-slate-50 border border-slate-200 text-sm rounded-l-lg px-4 py-2 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition">
+                    <button id="ai-send-btn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-r-lg transition flex items-center justify-center min-w-[50px]">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            `;
+            
+            containerElement.appendChild(aiContainer);
+
+            const inputField = document.getElementById('ai-input');
+            const sendBtn = document.getElementById('ai-send-btn');
+            const chatHistory = document.getElementById('ai-chat-history');
+
+            const sendMessage = async () => {
+                const text = inputField.value.trim();
+                if(!text) return;
+
+                // User Message
+                chatHistory.innerHTML += `
+                    <div class="flex items-start justify-end">
+                        <div class="bg-blue-600 text-white rounded-lg p-3 rounded-tr-none max-w-[85%] ml-auto">
+                            ${text}
+                        </div>
+                    </div>
+                `;
+                inputField.value = '';
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                // Loading Indicator
+                const loadingId = 'loading-' + Date.now();
+                chatHistory.innerHTML += `
+                    <div id="${loadingId}" class="flex items-start">
+                        <div class="bg-purple-100 text-purple-800 rounded-lg p-3 rounded-tl-none max-w-[85%] typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                `;
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                // Set button state
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                // Call API
+                const contextStr = `${sectionData.q1_text} ${sectionData.q2_text} ${sectionData.q3_text}`;
+                let responseText = await callGeminiAPI(text, sectionData.title, contextStr);
+                
+                // Basic markdown parsing for bold and line breaks
+                responseText = responseText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                responseText = responseText.replace(/\n/g, '<br>');
+
+                // Remove loading and append result
+                document.getElementById(loadingId).remove();
+                chatHistory.innerHTML += `
+                    <div class="flex items-start">
+                        <div class="bg-purple-100 text-purple-800 rounded-lg p-3 rounded-tl-none max-w-[85%] leading-relaxed">
+                            ${responseText}
+                        </div>
+                    </div>
+                `;
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+            };
+
+            sendBtn.addEventListener('click', sendMessage);
+            inputField.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+        }
+
+        // --- LOAD CONTENT VIEWS ---
+        function loadOverview() {
+            currentSectionId = 'overview';
+            updateNavState('overview');
+            sectionTitle.innerText = projectData.overview.title;
+            contentContainer.innerHTML = `<div class="fade-in max-w-5xl">${projectData.overview.content}</div>`;
+            renderChart();
+        }
+
+        function loadSection(id) {
+            currentSectionId = id;
+            updateNavState(id);
+            const data = projectData.sections.find(s => s.id === id);
+            sectionTitle.innerText = data.title;
+            
+            const html = `
+                <div class="fade-in max-w-4xl pb-10" id="section-content-area">
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-8 rounded-r-lg">
+                        <p class="text-blue-800"><i class="fas fa-info-circle mr-2"></i>${data.desc}</p>
+                    </div>
+
+                    <div class="space-y-6">
+                        <!-- Q1 -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition">
+                            <div class="flex items-start">
+                                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold mr-4 flex-shrink-0">1</div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-800 mb-2">${data.q1_title}</h4>
+                                    <p class="text-slate-600 leading-relaxed">${data.q1_text}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Q2 -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition">
+                            <div class="flex items-start">
+                                <div class="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-500 font-bold mr-4 flex-shrink-0"><i class="fas fa-microchip"></i></div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-800 mb-2">${data.q2_title}</h4>
+                                    <p class="text-slate-600 leading-relaxed">${data.q2_text}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Q3 -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition">
+                            <div class="flex items-start">
+                                <div class="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center text-teal-500 font-bold mr-4 flex-shrink-0"><i class="fas fa-cogs"></i></div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-800 mb-2">${data.q3_title}</h4>
+                                    <p class="text-slate-600 leading-relaxed">${data.q3_text}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            contentContainer.innerHTML = html;
+
+            // Render AI Chatbox at the bottom of the section
+            const sectionContentArea = document.getElementById('section-content-area');
+            renderAIChatbox(sectionContentArea, data);
+        }
+
+        // --- CHART GENERATION ---
+        function renderChart() {
+            const ctx = document.getElementById('systemResponseChart');
+            if(!ctx) return;
+
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            // Kapalı çevrim motor hızlanma eğrisi simülasyon verisi (Aşım ve oturma süresi)
+            const timeLabels = Array.from({length: 30}, (_, i) => i * 0.1);
+            const referenceData = Array(30).fill(100); // Hedef Hız (RPM %)
+            const actualSpeedData = timeLabels.map(t => {
+                if (t < 0.2) return 0;
+                // Sönümlü osilasyon formülü (Underdamped response)
+                return 100 * (1 - Math.exp(-2*t) * Math.cos(5*t)); 
+            });
+
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels.map(l => l.toFixed(1) + 's'),
+                    datasets: [
+                        {
+                            label: 'Hedeflenen Hız (Referans Voltajı)',
+                            data: referenceData,
+                            borderColor: '#94a3b8',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0
+                        },
+                        {
+                            label: 'Gerçekleşen Motor Hızı (Analog Geri Besleme)',
+                            data: actualSpeedData,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6 } },
+                        tooltip: { mode: 'index', intersect: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 140,
+                            title: { display: true, text: 'Hız / Voltaj (%)', font: {size: 11} }
+                        },
+                        x: {
+                            title: { display: true, text: 'Zaman (s)', font: {size: 11} },
+                            grid: { display: false }
+                        }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                }
+            });
+        }
+
+        // Bootstrap
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
